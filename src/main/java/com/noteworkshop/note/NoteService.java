@@ -3,6 +3,8 @@ package com.noteworkshop.note;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.noteworkshop.ai.NoteAi;
+import com.noteworkshop.ai.NoteAiMapper;
 import com.noteworkshop.common.BizException;
 import com.noteworkshop.common.PageResult;
 import com.noteworkshop.note.dto.NoteDetail;
@@ -24,10 +26,17 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class NoteService {
 
+    /** 笔记状态：正常 / 待审核 / 驳回 / 下架 */
+    public static final int STATUS_NORMAL = 1;
+    public static final int STATUS_PENDING = 2;
+    public static final int STATUS_REJECTED = 3;
+    public static final int STATUS_OFFLINE = 0;
+
     private final NoteMapper noteMapper;
     private final NoteImageMapper imageMapper;
     private final NoteLikeMapper likeMapper;
     private final UserMapper userMapper;
+    private final NoteAiMapper noteAiMapper;
 
     @Transactional
     public NoteDetail create(Long userId, NoteRequest request) {
@@ -36,8 +45,9 @@ public class NoteService {
         note.setBookName(request.bookName());
         note.setTitle(request.title());
         note.setContent(request.content());
-        note.setIsPublic(request.isPublic() == null ? 0 : request.isPublic());
-        note.setStatus(1);
+        boolean isPublic = request.isPublic() != null && request.isPublic() == 1;
+        note.setIsPublic(isPublic ? 1 : 0);
+        note.setStatus(isPublic ? STATUS_PENDING : STATUS_NORMAL);
         note.setLikeCount(0);
         note.setCommentCount(0);
         noteMapper.insert(note);
@@ -48,10 +58,14 @@ public class NoteService {
     @Transactional
     public NoteDetail update(Long userId, Long noteId, NoteRequest request) {
         Note note = requireOwned(userId, noteId);
+        boolean isPublic = request.isPublic() != null && request.isPublic() == 1;
         note.setBookName(request.bookName());
         note.setTitle(request.title());
         note.setContent(request.content());
-        note.setIsPublic(request.isPublic() == null ? 0 : request.isPublic());
+        note.setIsPublic(isPublic ? 1 : 0);
+        note.setStatus(isPublic ? STATUS_PENDING : STATUS_NORMAL);
+        note.setRejectReason(null);
+        note.setReviewedAt(null);
         noteMapper.updateById(note);
         imageMapper.delete(Wrappers.<NoteImage>lambdaQuery().eq(NoteImage::getNoteId, noteId));
         saveImages(noteId, request.images());
@@ -77,7 +91,7 @@ public class NoteService {
     public PageResult<Note> listPublic(long page, long size, String sort) {
         var query = Wrappers.<Note>lambdaQuery()
                 .eq(Note::getIsPublic, 1)
-                .eq(Note::getStatus, 1);
+                .eq(Note::getStatus, STATUS_NORMAL);
         if ("hot".equalsIgnoreCase(sort)) {
             query.orderByDesc(Note::getLikeCount).orderByDesc(Note::getCreatedAt);
         } else {
@@ -88,14 +102,29 @@ public class NoteService {
         return PageResult.of(p);
     }
 
+    public PageResult<Note> listPublicByAuthor(Long authorId, long page, long size) {
+        Page<Note> p = noteMapper.selectPage(new Page<>(page, size),
+                Wrappers.<Note>lambdaQuery()
+                        .eq(Note::getUserId, authorId)
+                        .eq(Note::getIsPublic, 1)
+                        .eq(Note::getStatus, STATUS_NORMAL)
+                        .orderByDesc(Note::getCreatedAt));
+        attachAuthors(p.getRecords());
+        return PageResult.of(p);
+    }
+
     public NoteDetail detail(Long noteId, Long currentUserId) {
         Note note = noteMapper.selectById(noteId);
-        if (note == null || (note.getStatus() != null && note.getStatus() == 0)) {
+        if (note == null) {
             throw new BizException(404, "笔记不存在");
         }
-        boolean isPublic = note.getIsPublic() != null && note.getIsPublic() == 1;
-        if (!isPublic && (currentUserId == null || !currentUserId.equals(note.getUserId()))) {
-            throw new BizException(403, "该笔记为私有笔记");
+        boolean owner = currentUserId != null && currentUserId.equals(note.getUserId());
+        if (!owner) {
+            boolean visible = note.getIsPublic() != null && note.getIsPublic() == 1
+                    && note.getStatus() != null && note.getStatus() == STATUS_NORMAL;
+            if (!visible) {
+                throw new BizException(404, "笔记不存在或未公开");
+            }
         }
         List<String> images = imageUrls(noteId);
         boolean liked = currentUserId != null && likeMapper.selectCount(
@@ -105,7 +134,11 @@ public class NoteService {
         note.setImages(images);
         note.setLiked(liked);
         attachAuthor(note);
-        return new NoteDetail(note, images, liked);
+        NoteAi ai = noteAiMapper.selectOne(Wrappers.<NoteAi>lambdaQuery()
+                .eq(NoteAi::getNoteId, noteId).last("limit 1"));
+        return new NoteDetail(note, images, liked,
+                ai == null ? null : ai.getType(),
+                ai == null ? null : ai.getContent());
     }
 
     @Transactional
@@ -114,8 +147,9 @@ public class NoteService {
         if (note == null) {
             throw new BizException(404, "笔记不存在");
         }
-        if (note.getIsPublic() == null || note.getIsPublic() != 1 || note.getStatus() == null || note.getStatus() != 1) {
-            throw new BizException(400, "只能点赞公开笔记");
+        if (note.getIsPublic() == null || note.getIsPublic() != 1
+                || note.getStatus() == null || note.getStatus() != STATUS_NORMAL) {
+            throw new BizException(400, "只能点赞公开且审核通过的笔记");
         }
         Long exists = likeMapper.selectCount(Wrappers.<NoteLike>lambdaQuery()
                 .eq(NoteLike::getUserId, userId)
@@ -162,7 +196,8 @@ public class NoteService {
         return PageResult.of(notes, likePage.getTotal(), page, size);
     }
 
-    private Note requireOwned(Long userId, Long noteId) {
+    /** 供 AI 模块使用：校验笔记归属 */
+    public Note requireOwned(Long userId, Long noteId) {
         Note note = noteMapper.selectById(noteId);
         if (note == null) {
             throw new BizException(404, "笔记不存在");

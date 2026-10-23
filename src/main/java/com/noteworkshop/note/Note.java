@@ -22,6 +22,8 @@ public class Note {
     private String content;
     private Integer isPublic;
     private Integer status;
+    private String rejectReason;
+    private LocalDateTime reviewedAt;
     private Integer likeCount;
     private Integer commentCount;
 

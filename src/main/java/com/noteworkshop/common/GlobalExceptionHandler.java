@@ -6,10 +6,16 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public Result<Void> handleNotFound(NoResourceFoundException e) {
+        return Result.fail(404, "资源不存在");
+    }
 
     @ExceptionHandler(BizException.class)
     public Result<Void> handleBiz(BizException e) {

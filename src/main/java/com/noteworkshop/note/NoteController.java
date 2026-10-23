@@ -5,6 +5,7 @@ import com.noteworkshop.common.Result;
 import com.noteworkshop.note.dto.NoteDetail;
 import com.noteworkshop.note.dto.NoteRequest;
 import com.noteworkshop.security.UserContext;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+@Tag(name = "笔记", description = "笔记增删改查、我的笔记、点赞")
 @RestController
 @RequestMapping("/api/notes")
 @RequiredArgsConstructor

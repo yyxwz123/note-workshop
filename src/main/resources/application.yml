@@ -6,21 +6,30 @@ spring:
     name: note-workshop
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/note_workshop?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8&useUnicode=true
-    username: root
-    password: "123456"
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
   servlet:
     multipart:
       max-file-size: 10MB
       max-request-size: 50MB
-  web:
-    resources:
-      static-locations: classpath:/static/
+  ai:
+    openai:
+      api-key: ${AI_API_KEY:sk-placeholder}
+      base-url: ${AI_BASE_URL:https://api.deepseek.com}
+      chat:
+        options:
+          model: ${AI_MODEL:deepseek-chat}
+          temperature: 0.7
 
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
     banner: false
     db-config:
@@ -28,9 +37,25 @@ mybatis-plus:
 
 app:
   jwt:
-    secret: note-workshop-demo-secret-key-change-me-0123456789abcdef
+    secret: ${JWT_SECRET:note-workshop-demo-secret-key-change-me-0123456789abcdef}
     expire-days: 7
   upload-dir: ./uploads
+  ai:
+    enabled: ${AI_ENABLED:true}
+    system-prompt: >-
+      你是「笔记工坊」平台的 AI 阅读助手。平台是面向在校学生的读书笔记社区，
+      用户会记录书籍信息、读书笔记、书页截图，并可以公开或私有保存。
+      你只回答与平台使用、读书笔记、阅读方法相关的问题；
+      与平台无关的问题请礼貌拒绝，并引导用户回到读书笔记话题。
+  cors:
+    allowed-origins: http://localhost:8081,http://127.0.0.1:8081
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    version: openapi_3_0
+  swagger-ui:
+    path: /swagger-ui.html
 
 logging:
   level:

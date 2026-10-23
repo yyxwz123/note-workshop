@@ -6,6 +6,7 @@ import com.noteworkshop.user.dto.AuthResponse;
 import com.noteworkshop.user.dto.LoginRequest;
 import com.noteworkshop.user.dto.ProfileRequest;
 import com.noteworkshop.user.dto.RegisterRequest;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "认证与用户", description = "注册、登录、个人资料")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")

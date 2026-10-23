@@ -1,0 +1,1469 @@
+openapi: 3.0.1
+info:
+  title: 笔记工坊 Note-Workshop API
+  description: |-
+    面向在校学生的读书笔记社区后端接口（V1 全功能）。
+
+    - 统一响应：`{ code, message, data }`，`code=0` 成功；401 未登录、403 无权限、404 不存在、503 AI 未配置
+    - 鉴权：除 `/api/auth/**`、`/api/public/**` 外需 `Authorization: Bearer <token>`
+    - 管理接口 `/api/admin/**` 需要 ADMIN 角色（默认账号 admin / admin123）
+  contact:
+    name: Note-Workshop
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8080
+    description: 本地开发环境
+security:
+  - bearerAuth: []
+tags:
+  - name: 认证与用户
+    description: 注册、登录、个人资料
+  - name: 笔记
+    description: 笔记增删改查、我的笔记、点赞
+  - name: 管理后台
+    description: 用户管理、笔记审核与下架、评论管理、AI 统计
+  - name: 关注与作者
+    description: 关注/取关、粉丝、热门作者
+  - name: 评论
+    description: 评论、二级回复、删除
+  - name: 文件上传
+    description: 头像、笔记配图上传
+  - name: AI 助手
+    description: 阅读辅助（总结/人群/评分）与智能客服
+  - name: 公开接口
+    description: 无需登录的浏览接口
+paths:
+  /api/users/me:
+    get:
+      tags:
+        - 认证与用户
+      operationId: getCurrentUser
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultUser'
+      summary: 当前用户信息
+    put:
+      tags:
+        - 认证与用户
+      operationId: updateProfile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultUser'
+      summary: 修改个人资料
+  /api/notes/{id}:
+    get:
+      tags:
+        - 笔记
+      operationId: getNoteDetail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultNoteDetail'
+      summary: 笔记详情
+    put:
+      tags:
+        - 笔记
+      operationId: updateNote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultNoteDetail'
+      summary: 编辑笔记
+    delete:
+      tags:
+        - 笔记
+      operationId: deleteNote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+      summary: 删除笔记
+  /api/admin/users/{id}/status:
+    put:
+      tags:
+        - 管理后台
+      operationId: setUserStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: status
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+      summary: 启用/禁用用户
+  /api/admin/notes/{id}/take-down:
+    put:
+      tags:
+        - 管理后台
+      operationId: takeDownNote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+      summary: 下架笔记
+  /api/users/{id}/follow:
+    post:
+      tags:
+        - 关注与作者
+      operationId: followUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: 关注用户
+    delete:
+      tags:
+        - 关注与作者
+      operationId: unfollowUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: 取消关注
+  /api/notes:
+    post:
+      tags:
+        - 笔记
+      operationId: createNote
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoteRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultNoteDetail'
+      summary: 新建笔记
+  /api/notes/{noteId}/comments:
+    post:
+      tags:
+        - 评论
+      operationId: addComment
+      parameters:
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultCommentVO'
+      summary: 发表评论/回复
+  /api/notes/{id}/like:
+    post:
+      tags:
+        - 笔记
+      operationId: toggleLike
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: 点赞/取消点赞
+  /api/files/upload:
+    post:
+      tags:
+        - 文件上传
+      operationId: uploadFile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+                - file
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringString'
+      summary: 上传图片
+  /api/auth/register:
+    post:
+      tags:
+        - 认证与用户
+      operationId: register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultUser'
+      summary: 注册
+  /api/auth/login:
+    post:
+      tags:
+        - 认证与用户
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultAuthResponse'
+      summary: 登录
+  /api/ai/notes/{noteId}/save:
+    post:
+      tags:
+        - AI 助手
+      operationId: saveAiResult
+      parameters:
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiSaveRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: 保存 AI 结果到笔记
+  /api/ai/notes/{noteId}/generate:
+    post:
+      tags:
+        - AI 助手
+      operationId: generateAi
+      parameters:
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AiGenerateRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: AI 生成（总结/人群/评分）
+  /api/ai/chat:
+    post:
+      tags:
+        - AI 助手
+      operationId: chatWithAi
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: AI 客服对话
+  /api/admin/notes/{id}/review:
+    post:
+      tags:
+        - 管理后台
+      operationId: reviewNote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewRequest'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+      summary: 审核笔记
+  /api/users/{id}/following:
+    get:
+      tags:
+        - 关注与作者
+      operationId: listFollowing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 10
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageResultUser'
+      summary: 关注列表
+  /api/users/{id}/followers:
+    get:
+      tags:
+        - 关注与作者
+      operationId: listFollowers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 10
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageResultUser'
+      summary: 粉丝列表
+  /api/public/users/{id}:
+    get:
+      tags:
+        - 关注与作者
+      operationId: getAuthorProfile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultAuthorVO'
+      summary: 作者主页信息
+  /api/public/users/{id}/notes:
+    get:
+      tags:
+        - 公开接口
+      operationId: listAuthorNotes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 10
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageResultNote'
+      summary: 作者的公开笔记
+  /api/public/notes:
+    get:
+      tags:
+        - 公开接口
+      operationId: listPublicNotes
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 10
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            default: latest
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageResultNote'
+      summary: 公开笔记流
+  /api/public/notes/{noteId}/comments:
+    get:
+      tags:
+        - 评论
+      operationId: listComments
+      parameters:
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultListCommentVO'
+      summary: 笔记评论树
+  /api/public/notes/{id}:
+    get:
+      tags:
+        - 公开接口
+      operationId: getPublicNote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultNoteDetail'
+      summary: 公开笔记详情
+  /api/public/health:
+    get:
+      tags:
+        - 公开接口
+      operationId: health
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringString'
+      summary: 健康检查
+  /api/public/authors/hot:
+    get:
+      tags:
+        - 关注与作者
+      operationId: listHotAuthors
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            default: 10
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultListAuthorVO'
+      summary: 热门作者榜
+  /api/notes/mine:
+    get:
+      tags:
+        - 笔记
+      operationId: listMyNotes
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 10
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageResultNote'
+      summary: 我的笔记
+  /api/notes/liked:
+    get:
+      tags:
+        - 笔记
+      operationId: listLikedNotes
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 10
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageResultNote'
+      summary: 我点赞的笔记
+  /api/ai/status:
+    get:
+      tags:
+        - AI 助手
+      operationId: aiStatus
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: AI 功能状态
+  /api/ai/sessions:
+    get:
+      tags:
+        - AI 助手
+      operationId: listAiSessions
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultListAiChatSession'
+      summary: AI 会话列表
+  /api/ai/sessions/{id}/messages:
+    get:
+      tags:
+        - AI 助手
+      operationId: listAiMessages
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultListAiChatMessage'
+      summary: 会话消息记录
+  /api/ai/notes/{noteId}:
+    get:
+      tags:
+        - AI 助手
+      operationId: getAiResult
+      parameters:
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: 查询笔记的 AI 结果
+  /api/admin/users:
+    get:
+      tags:
+        - 管理后台
+      operationId: listUsers
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 10
+        - name: keyword
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageResultUser'
+      summary: 用户列表
+  /api/admin/notes:
+    get:
+      tags:
+        - 管理后台
+      operationId: listAllNotes
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 10
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+        - name: keyword
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageResultNote'
+      summary: 笔记列表（可筛选状态）
+  /api/admin/notes/pending:
+    get:
+      tags:
+        - 管理后台
+      operationId: listPendingNotes
+      parameters:
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            default: 10
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultPageResultNote'
+      summary: 待审核笔记
+  /api/admin/dashboard:
+    get:
+      tags:
+        - 管理后台
+      operationId: adminDashboard
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: 后台数据概览
+  /api/admin/ai/stats:
+    get:
+      tags:
+        - 管理后台
+      operationId: aiStats
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultMapStringObject'
+      summary: AI 调用统计
+  /api/comments/{id}:
+    delete:
+      tags:
+        - 评论
+      operationId: deleteComment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+      summary: 删除自己的评论
+  /api/ai/sessions/{id}:
+    delete:
+      tags:
+        - AI 助手
+      operationId: deleteAiSession
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+      summary: 删除会话
+  /api/admin/comments/{id}:
+    delete:
+      tags:
+        - 管理后台
+      operationId: adminDeleteComment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ResultVoid'
+      summary: 管理员删除评论
+components:
+  schemas:
+    ProfileRequest:
+      type: object
+      properties:
+        nickname:
+          maxLength: 32
+          minLength: 0
+          type: string
+        bio:
+          maxLength: 200
+          minLength: 0
+          type: string
+        avatar:
+          maxLength: 255
+          minLength: 0
+          type: string
+    ResultUser:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/User'
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        username:
+          type: string
+        nickname:
+          type: string
+        avatar:
+          type: string
+        bio:
+          type: string
+        role:
+          type: string
+        status:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NoteRequest:
+      required:
+        - bookName
+        - content
+        - title
+      type: object
+      properties:
+        bookName:
+          maxLength: 100
+          minLength: 0
+          type: string
+        title:
+          maxLength: 100
+          minLength: 0
+          type: string
+        content:
+          minLength: 1
+          type: string
+        isPublic:
+          type: integer
+          format: int32
+        images:
+          type: array
+          items:
+            type: string
+    Note:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        bookName:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        isPublic:
+          type: integer
+          format: int32
+        status:
+          type: integer
+          format: int32
+        rejectReason:
+          type: string
+        reviewedAt:
+          type: string
+          format: date-time
+        likeCount:
+          type: integer
+          format: int32
+        commentCount:
+          type: integer
+          format: int32
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        authorName:
+          type: string
+        authorAvatar:
+          type: string
+        images:
+          type: array
+          items:
+            type: string
+        liked:
+          type: boolean
+    NoteDetail:
+      type: object
+      properties:
+        note:
+          $ref: '#/components/schemas/Note'
+        images:
+          type: array
+          items:
+            type: string
+        liked:
+          type: boolean
+        aiType:
+          type: string
+        aiContent:
+          type: string
+    ResultNoteDetail:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/NoteDetail'
+    ResultVoid:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: object
+    ResultMapStringObject:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: object
+          additionalProperties:
+            type: object
+    CommentRequest:
+      required:
+        - content
+      type: object
+      properties:
+        content:
+          maxLength: 500
+          minLength: 0
+          type: string
+        parentId:
+          type: integer
+          format: int64
+    CommentVO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        noteId:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        nickname:
+          type: string
+        avatar:
+          type: string
+        parentId:
+          type: integer
+          format: int64
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentVO'
+    ResultCommentVO:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/CommentVO'
+    ResultMapStringString:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: object
+          additionalProperties:
+            type: string
+    RegisterRequest:
+      required:
+        - password
+        - username
+      type: object
+      properties:
+        username:
+          maxLength: 32
+          minLength: 4
+          type: string
+        password:
+          maxLength: 32
+          minLength: 6
+          type: string
+        nickname:
+          maxLength: 32
+          minLength: 0
+          type: string
+    LoginRequest:
+      required:
+        - password
+        - username
+      type: object
+      properties:
+        username:
+          minLength: 1
+          type: string
+        password:
+          minLength: 1
+          type: string
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+    ResultAuthResponse:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AuthResponse'
+    AiSaveRequest:
+      required:
+        - content
+        - type
+      type: object
+      properties:
+        type:
+          minLength: 1
+          pattern: SUMMARY|AUDIENCE|SCORE
+          type: string
+        content:
+          minLength: 1
+          type: string
+    AiGenerateRequest:
+      required:
+        - type
+      type: object
+      properties:
+        type:
+          minLength: 1
+          pattern: SUMMARY|AUDIENCE|SCORE
+          type: string
+    ChatRequest:
+      required:
+        - message
+      type: object
+      properties:
+        sessionId:
+          type: integer
+          format: int64
+        message:
+          maxLength: 2000
+          minLength: 0
+          type: string
+    ReviewRequest:
+      type: object
+      properties:
+        approved:
+          type: boolean
+        reason:
+          maxLength: 200
+          minLength: 0
+          type: string
+    PageResultUser:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+          format: int64
+        size:
+          type: integer
+          format: int64
+    ResultPageResultUser:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/PageResultUser'
+    AuthorVO:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        nickname:
+          type: string
+        avatar:
+          type: string
+        bio:
+          type: string
+        fansCount:
+          type: integer
+          format: int64
+        noteCount:
+          type: integer
+          format: int64
+        followed:
+          type: boolean
+    ResultAuthorVO:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AuthorVO'
+    PageResultNote:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/Note'
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+          format: int64
+        size:
+          type: integer
+          format: int64
+    ResultPageResultNote:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/PageResultNote'
+    ResultListCommentVO:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommentVO'
+    ResultListAuthorVO:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthorVO'
+    AiChatSession:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        userId:
+          type: integer
+          format: int64
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ResultListAiChatSession:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AiChatSession'
+    AiChatMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        sessionId:
+          type: integer
+          format: int64
+        role:
+          type: string
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ResultListAiChatMessage:
+      type: object
+      properties:
+        code:
+          type: integer
+          format: int32
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AiChatMessage'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
