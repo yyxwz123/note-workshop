@@ -1,6 +1,7 @@
 package com.noteworkshop.file;
 
 import com.noteworkshop.common.BizException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,6 +15,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class FileStorageService {
 
@@ -41,6 +43,7 @@ public class FileStorageService {
             try (var in = file.getInputStream()) {
                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
             }
+            log.info("文件上传成功 original={} saved={} size={}", original, name, file.getSize());
             return "/uploads/" + name;
         } catch (IOException e) {
             throw new BizException(500, "文件保存失败");

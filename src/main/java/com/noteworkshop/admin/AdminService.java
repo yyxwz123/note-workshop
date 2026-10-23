@@ -17,6 +17,8 @@ import com.noteworkshop.note.NoteService;
 import com.noteworkshop.user.User;
 import com.noteworkshop.user.UserMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -26,6 +28,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminService {
@@ -77,6 +80,7 @@ public class AdminService {
         }
         user.setStatus(status);
         userMapper.updateById(user);
+        log.info("管理员修改用户状态 userId={} status={}", userId, status);
     }
 
     public PageResult<Note> notes(long page, long size, Integer status, String keyword) {
@@ -103,6 +107,7 @@ public class AdminService {
         note.setRejectReason(approved ? null : (StringUtils.hasText(reason) ? reason : "内容不符合公开规范"));
         note.setReviewedAt(LocalDateTime.now());
         noteMapper.updateById(note);
+        log.info("笔记审核 noteId={} approved={} reason={}", noteId, approved, note.getRejectReason());
     }
 
     @Transactional
@@ -113,6 +118,7 @@ public class AdminService {
         }
         note.setStatus(NoteService.STATUS_OFFLINE);
         noteMapper.updateById(note);
+        log.info("管理员下架笔记 noteId={}", noteId);
     }
 
     public void deleteComment(Long commentId) {

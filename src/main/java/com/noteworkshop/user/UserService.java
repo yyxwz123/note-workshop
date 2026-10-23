@@ -8,11 +8,13 @@ import com.noteworkshop.user.dto.LoginRequest;
 import com.noteworkshop.user.dto.ProfileRequest;
 import com.noteworkshop.user.dto.RegisterRequest;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -36,6 +38,7 @@ public class UserService {
         user.setStatus(1);
         userMapper.insert(user);
         user.setPassword(null);
+        log.info("用户注册成功 username={} id={}", user.getUsername(), user.getId());
         return user;
     }
 
@@ -50,6 +53,7 @@ public class UserService {
         }
         String token = jwtUtil.issue(user.getId(), user.getUsername());
         user.setPassword(null);
+        log.info("用户登录成功 username={} id={}", user.getUsername(), user.getId());
         return new AuthResponse(token, user);
     }
 
