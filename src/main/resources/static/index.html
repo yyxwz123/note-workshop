@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>笔记工坊 · Note-Workshop</title>
+<style>
+  :root { --primary:#3b6ef6; --bg:#f5f6fa; --card:#fff; --text:#222; --muted:#888; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); }
+  header { background:var(--card); border-bottom:1px solid #eee; padding:14px 24px; display:flex; align-items:center; gap:16px; position:sticky; top:0; z-index:10; }
+  header h1 { font-size:18px; margin:0; }
+  header .spacer { flex:1; }
+  .container { max-width:960px; margin:24px auto; padding:0 16px; }
+  .card { background:var(--card); border-radius:12px; padding:18px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  input, textarea, select { width:100%; padding:9px 12px; border:1px solid #ddd; border-radius:8px; font-size:14px; font-family:inherit; }
+  textarea { min-height:110px; resize:vertical; }
+  button { background:var(--primary); color:#fff; border:0; border-radius:8px; padding:9px 16px; font-size:14px; cursor:pointer; }
+  button ghost, button.ghost { background:#eef2ff; color:var(--primary); }
+  button:disabled { opacity:.6; cursor:not-allowed; }
+  .row { display:flex; gap:10px; margin-bottom:10px; }
+  .tabs { display:flex; gap:8px; margin-bottom:16px; }
+  .tabs button { background:#fff; color:#555; border:1px solid #e3e3e3; }
+  .tabs button.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+  .note h3 { margin:0 0 6px; font-size:17px; }
+  .note .meta { color:var(--muted); font-size:13px; margin-bottom:10px; }
+  .note .content { white-space:pre-wrap; line-height:1.7; font-size:14px; }
+  .note .imgs { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .note .imgs img { width:96px; height:96px; object-fit:cover; border-radius:8px; border:1px solid #eee; }
+  .actions { margin-top:12px; display:flex; gap:10px; align-items:center; color:var(--muted); font-size:13px; }
+  .tag { display:inline-block; background:#eef2ff; color:var(--primary); border-radius:6px; padding:2px 8px; font-size:12px; margin-right:6px; }
+  .hidden { display:none !important; }
+  .msg { font-size:13px; color:#d33; min-height:18px; }
+  .ok { color:#1a9e5c; }
+  #authBox { max-width:380px; margin:60px auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 笔记工坊</h1>
+  <span class="spacer"></span>
+  <span id="who" class="meta"></span>
+  <button id="logoutBtn" class="ghost hidden">退出</button>
+</header>
+
+<div class="container">
+  <!-- 登录 / 注册 -->
+  <div id="authBox" class="card">
+    <h3 style="margin-top:0">登录 / 注册</h3>
+    <div class="row"><input id="username" placeholder="用户名（4-32 位）"></div>
+    <div class="row"><input id="password" type="password" placeholder="密码（6-32 位）"></div>
+    <div class="row"><input id="nickname" placeholder="昵称（注册时可选）"></div>
+    <div class="row">
+      <button onclick="login()">登录</button>
+      <button class="ghost" onclick="register()">注册</button>
+    </div>
+    <div id="authMsg" class="msg"></div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="main" class="hidden">
+    <div class="tabs">
+      <button id="tabPublic" class="active" onclick="switchTab('public')">公开笔记</button>
+      <button id="tabMine" onclick="switchTab('mine')">我的笔记</button>
+      <button id="tabLiked" onclick="switchTab('liked')">我点赞的</button>
+    </div>
+
+    <div id="publishCard" class="card">
+      <h3 style="margin-top:0">写一篇读书笔记</h3>
+      <div class="row">
+        <input id="bookName" placeholder="图书名称（必填）">
+        <input id="title" placeholder="笔记标题（必填）">
+      </div>
+      <div class="row"><textarea id="content" placeholder="正文（必填）"></textarea></div>
+      <div class="row">
+        <select id="isPublic">
+          <option value="1">公开</option>
+          <option value="0">私有</option>
+        </select>
+      </div>
+      <div class="row"><input id="images" type="file" accept="image/*" multiple></div>
+      <div class="row"><button id="publishBtn" onclick="publish()">发布</button></div>
+      <div id="publishMsg" class="msg"></div>
+    </div>
+
+    <div id="list"></div>
+    <div id="empty" class="card hidden" style="text-align:center;color:#999">还没有笔记</div>
+  </div>
+</div>
+
+<script>
+const API = '';
+const tokenKey = 'nw_token';
+const userKey = 'nw_user';
+
+let token = localStorage.getItem(tokenKey) || '';
+let user = JSON.parse(localStorage.getItem(userKey) || 'null');
+let currentTab = 'public';
+let page = 1;
+const size = 10;
+
+function authHeaders() {
+  return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(API + path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(options.headers || {}) }
+  });
+  const data = await res.json();
+  if (data.code !== 0) throw new Error(data.message || '请求失败');
+  return data.data;
+}
+
+function toast(el, text, ok) {
+  el.textContent = text;
+  el.className = 'msg' + (ok ? ' ok' : '');
+  setTimeout(() => { if (el.textContent === text) el.textContent = ''; }, 3000);
+}
+
+async function login() {
+  const msg = document.getElementById('authMsg');
+  try {
+    const data = await api('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: document.getElementById('username').value.trim(),
+        password: document.getElementById('password').value
+      })
+    });
+    token = data.token; user = data.user;
+    localStorage.setItem(tokenKey, token);
+    localStorage.setItem(userKey, JSON.stringify(user));
+    enterApp();
+  } catch (e) { toast(msg, e.message); }
+}
+
+async function register() {
+  const msg = document.getElementById('authMsg');
+  try {
+    await api('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: document.getElementById('username').value.trim(),
+        password: document.getElementById('password').value,
+        nickname: document.getElementById('nickname').value.trim()
+      })
+    });
+    toast(msg, '注册成功，请登录', true);
+  } catch (e) { toast(msg, e.message); }
+}
+
+function logout() {
+  token = ''; user = null;
+  localStorage.removeItem(tokenKey);
+  localStorage.removeItem(userKey);
+  document.getElementById('main').classList.add('hidden');
+  document.getElementById('authBox').classList.remove('hidden');
+  document.getElementById('logoutBtn').classList.add('hidden');
+  document.getElementById('who').textContent = '';
+}
+
+function enterApp() {
+  document.getElementById('authBox').classList.add('hidden');
+  document.getElementById('main').classList.remove('hidden');
+  document.getElementById('logoutBtn').classList.remove('hidden');
+  document.getElementById('who').textContent = user ? (user.nickname || user.username) : '';
+  loadNotes();
+}
+
+function switchTab(tab) {
+  currentTab = tab; page = 1;
+  ['public', 'mine', 'liked'].forEach(t => {
+    document.getElementById('tab' + t[0].toUpperCase() + t.slice(1)).classList.toggle('active', t === tab);
+  });
+  document.getElementById('publishCard').classList.toggle('hidden', tab !== 'mine');
+  loadNotes();
+}
+
+async function loadNotes() {
+  const list = document.getElementById('list');
+  list.innerHTML = '<div class="card">加载中...</div>';
+  try {
+    let data;
+    if (currentTab === 'public') data = await api(`/api/public/notes?page=${page}&size=${size}&sort=latest`);
+    else if (currentTab === 'mine') data = await api(`/api/notes/mine?page=${page}&size=${size}`);
+    else data = await api(`/api/notes/liked?page=${page}&size=${size}`);
+    render(data.records || []);
+    document.getElementById('empty').classList.toggle('hidden', (data.records || []).length > 0);
+  } catch (e) {
+    list.innerHTML = `<div class="card">${e.message}</div>`;
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function render(notes) {
+  const list = document.getElementById('list');
+  if (!notes.length) { list.innerHTML = ''; return; }
+  list.innerHTML = notes.map(n => `
+    <div class="card note" data-id="${n.id}">
+      <h3>${escapeHtml(n.title)}</h3>
+      <div class="meta">
+        <span class="tag">${escapeHtml(n.bookName)}</span>
+        ${escapeHtml(n.authorName || '我')} · ${(n.createdAt || '').replace('T', ' ').slice(0, 16)}
+        ${n.isPublic === 1 ? '' : '<span class="tag">私有</span>'}
+      </div>
+      <div class="content">${escapeHtml((n.content || '').slice(0, 300))}${(n.content || '').length > 300 ? '...' : ''}</div>
+      ${(n.images && n.images.length) ? `<div class="imgs">${n.images.map(u => `<img src="${escapeHtml(u)}">`).join('')}</div>` : ''}
+      <div class="actions">
+        <button class="ghost" onclick="like(${n.id}, this)">${n.liked ? '❤️ 已赞' : '🤍 点赞'} ${n.likeCount ?? 0}</button>
+        ${currentTab === 'mine' ? `<button class="ghost" onclick="removeNote(${n.id})">删除</button>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+async function like(id, btn) {
+  try {
+    const data = await api(`/api/notes/${id}/like`, { method: 'POST' });
+    btn.textContent = (data.liked ? '❤️ 已赞 ' : '🤍 点赞 ') + data.likeCount;
+    if (currentTab === 'liked') loadNotes();
+  } catch (e) { alert(e.message); }
+}
+
+async function removeNote(id) {
+  if (!confirm('确定删除这篇笔记？')) return;
+  try {
+    await api(`/api/notes/${id}`, { method: 'DELETE' });
+    loadNotes();
+  } catch (e) { alert(e.message); }
+}
+
+async function uploadImages(files) {
+  const urls = [];
+  for (const file of files) {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/files/upload', { method: 'POST', headers: authHeaders(), body: form });
+    const data = await res.json();
+    if (data.code !== 0) throw new Error(data.message || '上传失败');
+    urls.push(data.data.url);
+  }
+  return urls;
+}
+
+async function publish() {
+  const msg = document.getElementById('publishMsg');
+  const btn = document.getElementById('publishBtn');
+  btn.disabled = true;
+  try {
+    const files = document.getElementById('images').files;
+    const images = files.length ? await uploadImages(files) : [];
+    await api('/api/notes', {
+      method: 'POST',
+      body: JSON.stringify({
+        bookName: document.getElementById('bookName').value.trim(),
+        title: document.getElementById('title').value.trim(),
+        content: document.getElementById('content').value,
+        isPublic: Number(document.getElementById('isPublic').value),
+        images
+      })
+    });
+    toast(msg, '发布成功', true);
+    document.getElementById('bookName').value = '';
+    document.getElementById('title').value = '';
+    document.getElementById('content').value = '';
+    document.getElementById('images').value = '';
+    currentTab = 'mine';
+    switchTab('mine');
+  } catch (e) { toast(msg, e.message); }
+  finally { btn.disabled = false; }
+}
+
+document.getElementById('logoutBtn').onclick = logout;
+if (token) enterApp();
+</script>
+</body>
+</html>
