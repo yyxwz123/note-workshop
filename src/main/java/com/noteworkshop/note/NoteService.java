@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.noteworkshop.ai.NoteAi;
 import com.noteworkshop.ai.NoteAiMapper;
+import com.noteworkshop.comment.CommentService;
 import com.noteworkshop.common.BizException;
 import com.noteworkshop.common.PageResult;
 import com.noteworkshop.note.dto.NoteDetail;
@@ -37,6 +38,7 @@ public class NoteService {
     private final NoteLikeMapper likeMapper;
     private final UserMapper userMapper;
     private final NoteAiMapper noteAiMapper;
+    private final CommentService commentService;
 
     @Transactional
     public NoteDetail create(Long userId, NoteRequest request) {
@@ -75,6 +77,8 @@ public class NoteService {
     @Transactional
     public void delete(Long userId, Long noteId) {
         requireOwned(userId, noteId);
+        commentService.deleteByNote(noteId);
+        noteAiMapper.delete(Wrappers.<NoteAi>lambdaQuery().eq(NoteAi::getNoteId, noteId));
         noteMapper.deleteById(noteId);
         imageMapper.delete(Wrappers.<NoteImage>lambdaQuery().eq(NoteImage::getNoteId, noteId));
         likeMapper.delete(Wrappers.<NoteLike>lambdaQuery().eq(NoteLike::getNoteId, noteId));

@@ -34,6 +34,12 @@ public class CommentService {
     private final UserMapper userMapper;
 
     public List<CommentVO> listByNote(Long noteId) {
+        // 评论跟随笔记可见性：私有/待审核/已下架的笔记，评论不对外暴露
+        Note note = noteMapper.selectById(noteId);
+        if (note == null || note.getStatus() == null || note.getStatus() != 1
+                || note.getIsPublic() == null || note.getIsPublic() != 1) {
+            throw new BizException(404, "笔记不存在或未公开");
+        }
         List<Comment> comments = commentMapper.selectList(Wrappers.<Comment>lambdaQuery()
                 .eq(Comment::getNoteId, noteId)
                 .eq(Comment::getDeleted, 0)
@@ -119,6 +125,15 @@ public class CommentService {
         }
         removeCascade(comment);
         log.info("管理员删除评论 {}", commentId);
+    }
+
+    /** 笔记被删除时，级联逻辑删除其全部评论 */
+    @Transactional
+    public void deleteByNote(Long noteId) {
+        commentMapper.update(null, Wrappers.<Comment>lambdaUpdate()
+                .eq(Comment::getNoteId, noteId)
+                .eq(Comment::getDeleted, 0)
+                .set(Comment::getDeleted, 1));
     }
 
     /** 逻辑删除该评论及其所有子孙评论 */
