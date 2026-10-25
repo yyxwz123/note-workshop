@@ -122,6 +122,96 @@ public class NoteWorkshopApplication {
   → 异常则进 GlobalExceptionHandler
 ```
 
+#### 1.7.1 时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant B as 浏览器 axios
+    participant P as 代理 8081
+    participant T as Tomcat
+    participant D as DispatcherServlet
+    participant A as AuthInterceptor
+    participant AD as AdminInterceptor
+    participant C as Controller
+    participant S as Service
+    participant M as Mapper
+    participant DB as MySQL
+
+    B->>P: POST /api/notes/1/comments + Bearer token
+    P->>T: 转发到 8080
+    T->>D: HttpServletRequest
+    D->>D: HandlerMapping 匹配 Controller
+    D->>A: preHandle
+    A->>A: 验签 + UserContext.set(userId)
+    alt 路径是 /api/admin/**
+        A->>AD: preHandle
+        AD->>DB: 查 user.role
+    end
+    D->>C: 参数解析 + @Valid 校验
+    C->>S: add(userId, noteId, request)
+    S->>M: insert comment / update note
+    M->>DB: SQL
+    DB-->>M: 影响行数
+    S-->>C: CommentVO
+    C-->>D: Result.ok(data)
+    D-->>B: HTTP 200 + JSON
+    Note over D,DB: 任意一层抛异常 → GlobalExceptionHandler → Result(code, message)
+```
+
+#### 1.7.2 逐站说明
+
+| # | 站点 | 做了什么 | 本项目落点 | 可能出错 |
+| --- | --- | --- | --- | --- |
+| 1 | 浏览器 axios | 对象转 JSON、加 token | `frontend/src/api/index.js:23` | 没登录、JSON 格式错 |
+| 2 | 代理 8081→8080 | 开发态转发，浏览器视为同源 | `frontend/vue.config.js` | 后端没启动 → 502 |
+| 3 | Tomcat | 解析 HTTP、分配线程 | Spring Boot 内嵌 | 请求体超限、端口占用 |
+| 4 | DispatcherServlet | 按路径+方法找 Controller，准备参数 | Spring MVC | 路径不存在 → 404 |
+| 5 | AuthInterceptor | 验 token、写 UserContext | `security/AuthInterceptor.java:17` | token 缺失/过期 → 401 |
+| 6 | AdminInterceptor | 查库校验 ADMIN | `security/AdminInterceptor.java:19` | 非管理员 → 403 |
+| 7 | Controller | `@RequestBody` 反序列化 + `@Valid` | `comment/CommentController.java:33` | 校验失败 → 400 |
+| 8 | Service | 业务规则、权限、事务 | `comment/CommentService.java:70` | 业务异常 → 400/403/404 |
+| 9 | Mapper | 生成/执行 SQL | `CommentMapper extends BaseMapper` | 唯一索引冲突、SQL 错 |
+| 10 | MySQL | 连接池、事务、行锁 | HikariCP + InnoDB | 连接耗尽、死锁 |
+| 11 | Result → JSON | Jackson 序列化 | `common/Result.java` | 循环引用、懒加载 |
+| 12 | 异常处理 | 统一转 `{code,message}` | `common/GlobalExceptionHandler.java` | 兜底 500 不泄露堆栈 |
+| 13 | 前端拦截器 | 解包 `data`、401 跳登录 | `frontend/src/api/index.js:35` | 重复跳转（已加标志位） |
+
+**三个关键细节**：
+
+1. **拦截器在 Controller 之前**，所以未登录请求根本进不了业务代码；
+2. **`@Valid` 失败不会进方法体**，直接抛 `MethodArgumentNotValidException`；
+3. **事务在 Service 方法上**，方法正常返回才提交，抛 `RuntimeException` 回滚。
+
+#### 1.7.3 异常对照表
+
+| 异常 | 从哪来 | 返回 `code` |
+| --- | --- | --- |
+| `MethodArgumentNotValidException` | `@Valid` | 400 |
+| `BizException(401)` | AuthInterceptor | 401 |
+| `BizException(403)` | AdminInterceptor / Service 归属校验 | 403 |
+| `BizException(404)` | Service（资源不存在/未公开） | 404 |
+| `BizException(503)` | AiService 调用失败 | 503 |
+| `MaxUploadSizeExceededException` | 上传超限 | 400 |
+| `NoResourceFoundException` | 静态资源不存在 | 404 |
+| 其他 `Exception` | 任意层 | 500（只记日志，不返回堆栈） |
+
+> 注意：本项目 HTTP 状态码通常仍是 200，业务结果看 body 的 `code`。
+
+#### 1.7.4 三个最容易讲错的点
+
+1. **拦截器 ≠ 过滤器**：过滤器在 Servlet 层，拿不到 Controller 方法；拦截器在 Spring MVC 内，能拿到 handler、能抛业务异常。
+2. **事务边界在 Service**：Controller 不开事务；同类自调用会让 `@Transactional` 失效。
+3. **失败也返回 200**：HTTP 状态码表"通信成功"，body 的 `code` 表"业务结果"，这是团队约定。
+
+#### 1.7.5 可能的追问
+
+- `@Valid` 什么时候触发？→ Controller 方法调用前，由参数解析器触发。
+- ThreadLocal 什么时候清理？→ `afterCompletion`，preHandle 成功后即使抛异常也会执行。
+- 为什么管理员校验查库？→ 角色变更要立即生效，不能等 token 过期。
+- Service 里 catch 了异常还会回滚吗？→ 不会，除非重新抛出或手动标记回滚。
+
+
 用"发表评论"举例最直观：`POST /api/notes/1/comments`。
 
 ### 1.8 数据库：把"用户写笔记"翻译成表
