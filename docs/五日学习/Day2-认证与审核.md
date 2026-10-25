@@ -135,6 +135,73 @@ eyJhbGciOiJIUzM4NCJ9 . eyJzdWIiOiIxIiwidXNlcm5hbWUiOiJkZW1vMDEiLCJpYXQiOjE3... .
 
 ---
 
+### 1.11 JWT 鉴权时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as 浏览器
+    participant U as UserController
+    participant S as UserService
+    participant J as JwtUtil
+    participant DB as MySQL
+    participant I as AuthInterceptor
+
+    C->>U: POST /api/auth/login
+    U->>S: login(username, password)
+    S->>DB: select user where username = ?
+    DB-->>S: BCrypt 哈希
+    S->>S: BCrypt.matches(明文, 哈希)
+    alt 密码错误 / 账号禁用
+        S-->>C: 401 / 403
+    else 校验通过
+        S->>J: issue(userId, username)
+        J-->>S: token（HS384，7 天）
+        S-->>C: {code:0, data:{token, user}}
+    end
+    Note over C: 前端存 localStorage
+    C->>I: 后续请求 + Bearer token
+    I->>I: 验签、取 userId
+    I->>I: UserContext.set(userId)
+    I-->>C: 放行到 Controller
+```
+
+### 1.12 鉴权链逐站表
+
+| # | 站点 | 做什么 | 代码位置 | 失败表现 |
+| --- | --- | --- | --- | --- |
+| 1 | 前端请求拦截器 | 从 localStorage 取 token，加 `Authorization` | `api/index.js:23` | 没登录 → 不带头 |
+| 2 | AuthInterceptor | 取头、验签、解析 userId | `AuthInterceptor.java:22-31` | 401 |
+| 3 | UserContext | 把 userId 放进当前线程 | `UserContext.java` | — |
+| 4 | 业务归属校验 | 资源 `userId` 与当前用户比对 | `NoteService.requireOwned` | 403 |
+| 5 | AdminInterceptor | 查库校验 `role=ADMIN` | `AdminInterceptor.java:19-27` | 403 |
+| 6 | afterCompletion | 清理 ThreadLocal | `AuthInterceptor.java:34-38` | 不清理会串用户 |
+
+### 1.13 审核状态机图
+
+```mermaid
+stateDiagram-v2
+    state "已发布 1" as published
+    state "待审核 2" as pending
+    state "已驳回 3" as rejected
+    state "已下架 0" as offline
+
+    [*] --> published: 创建/修改私有笔记
+    [*] --> pending: 创建/修改公开笔记
+    pending --> published: 管理员通过
+    pending --> rejected: 管理员驳回（写原因）
+    rejected --> pending: 作者修改后重新提交
+    published --> pending: 作者修改公开笔记
+    published --> offline: 管理员下架
+    offline --> [*]
+```
+
+**读图要点**：
+
+- 只有 `pending` 能被审核，其他状态调用审核接口会 400；
+- 修改公开笔记会从 `published` 回到 `pending`，防止"过审后改内容"；
+- 私有笔记创建即 `published`，不需要审核。
+
 ## 2. 代码逐行读
 
 ### 2.1 JWT 签发与校验

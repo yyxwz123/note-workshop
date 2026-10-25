@@ -170,6 +170,76 @@ router.beforeEach((to) => {
 
 ---
 
+### 1.14 AI 生成时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as 客户端
+    participant A as AiController
+    participant S as AiService
+    participant L as 大模型 API
+    participant DB as MySQL
+
+    C->>A: POST /api/ai/notes/1/generate {type}
+    A->>S: generate(userId, noteId, type)
+    S->>DB: 查笔记并校验归属
+    S->>S: 按类型拼 prompt
+    S->>L: chat/completions
+    alt 成功
+        L-->>S: 文本
+        S->>DB: insert ai_call_log(success=1)
+        S-->>C: {type, content, saved:false}
+    else 失败（401 / 超时 / 限流）
+        L-->>S: error
+        S->>DB: insert ai_call_log(success=0)
+        S-->>C: 503 AI 服务暂不可用
+    end
+    Note over C: 用户点「保存到笔记」
+    C->>A: POST /api/ai/notes/1/save {type, content}
+    A->>S: save(...)
+    S->>DB: upsert note_ai（note_id 唯一）
+    S-->>C: {saved:true}
+```
+
+### 1.15 前端页面加载时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant R as Vue Router
+    participant V as 页面组件
+    participant X as axios
+    participant B as 后端
+
+    U->>R: 访问 /notes/1
+    R->>R: beforeEach 校验 requiresAuth / admin
+    R->>V: 渲染 NoteDetailView
+    V->>X: onMounted 请求详情
+    X->>X: 请求拦截器加 Bearer
+    X->>B: GET /api/notes/1
+    B-->>X: {code:0, data}
+    X->>X: 响应拦截器解包 data
+    X-->>V: data
+    V-->>U: 渲染页面
+```
+
+### 1.16 AI 与前端逐站表
+
+| # | 站点 | 做什么 | 代码位置 | 失败表现 |
+| --- | --- | --- | --- | --- |
+| 1 | 路由守卫 | 校验登录/管理员 | `router/index.js:89` | 跳登录/首页 |
+| 2 | 页面请求 | `onMounted` 发起请求 | 各 View | — |
+| 3 | axios 请求拦截器 | 加 Bearer | `api/index.js:23` | 无 token 时 401 |
+| 4 | AI 接口 | 接收 type | `AiController.java` | 参数非法 400 |
+| 5 | 归属校验 | 只能操作自己的笔记 | `NoteService.requireOwned` | 403 |
+| 6 | Prompt 拼装 | 按类型生成任务描述 | `AiService.java:208` | — |
+| 7 | 模型调用 | ChatClient → 兼容接口 | `AiService.java:200` | 401/超时 → 503 |
+| 8 | 调用日志 | 成功/失败都写 | `AiService.java:239` | — |
+| 9 | 保存结果 | `note_ai` upsert，一篇一条 | `AiService.java:80` | 唯一索引兜底 |
+| 10 | 响应拦截器 | 解包、401 跳登录 | `api/index.js:35` | — |
+
 ## 2. 代码逐行读
 
 ### 2.1 AI 客服主流程

@@ -145,6 +145,67 @@ LIMIT 10;
 
 ---
 
+### 1.11 点赞并发时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant A as 用户A
+    participant B as 用户B
+    participant S as NoteService
+    participant L as note_like
+    participant N as note
+
+    A->>S: POST /api/notes/1/like
+    B->>S: POST /api/notes/1/like
+    S->>L: 查 A 是否已赞
+    S->>L: 查 B 是否已赞
+    L-->>S: 均为 0
+    S->>L: insert(A, note1)
+    S->>L: insert(B, note1)
+    Note over L: 唯一索引 (user_id, note_id) 兜底
+    S->>N: UPDATE like_count = like_count + 1
+    S->>N: UPDATE like_count = like_count + 1
+    Note over N: 行锁保证两次自增都生效，最终 +2
+```
+
+**同一用户连点两次**：两个请求都可能判断"没点过"，第二个 `insert` 被唯一索引拒绝（抛异常、事务回滚），不会产生两条记录。
+
+### 1.12 评论级联删除时序图
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as 作者
+    participant S as CommentService
+    participant DB as MySQL
+
+    C->>S: DELETE /api/comments/22
+    S->>DB: select comment 22
+    S->>S: 校验 comment.userId == 当前用户
+    S->>DB: select 该笔记全部 deleted=0 评论
+    DB-->>S: comments
+    S->>S: groupingBy(parentId) + BFS 收集子孙
+    S->>DB: UPDATE comment SET deleted=1 WHERE id IN (...)
+    S->>DB: UPDATE note SET comment_count = GREATEST(... - N, 0)
+    S-->>C: {code:0}
+```
+
+### 1.13 互动链逐站表
+
+| # | 站点 | 做什么 | 代码位置 | 失败表现 |
+| --- | --- | --- | --- | --- |
+| 1 | 点赞接口 | 接收笔记 id | `NoteController.java` | — |
+| 2 | 前置校验 | 笔记必须公开且已发布 | `NoteService.java:150` | 400 |
+| 3 | 唯一索引 | 防重复点赞 | `note_like` 表 | 重复插入被拒 |
+| 4 | 原子计数 | `like_count ± 1` | `NoteService.java:162-173` | 计数不丢更新 |
+| 5 | 评论接口 | 接收内容与 parentId | `CommentController.java:33` | — |
+| 6 | 父评论校验 | 同笔记、未删除 | `CommentService.java:77-82` | 400 |
+| 7 | 建树 | 一次查询 + 分组 | `CommentService.java:36-67` | — |
+| 8 | 级联删除 | BFS + 批量 UPDATE | `CommentService.java:125-150` | — |
+| 9 | 逻辑删除 | `deleted=1`，查询过滤 | `comment` 表 | — |
+| 10 | 计数回减 | `GREATEST(...,0)` 防负 | `CommentService.java:147` | — |
+
 ## 2. 代码逐行读
 
 ### 2.1 点赞
