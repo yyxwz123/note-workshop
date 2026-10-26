@@ -1,5 +1,8 @@
 server:
   port: 8080
+  # 反向代理（cloudflared / nginx）转发时，按 X-Forwarded-Proto/Host 还原真实协议与域名，
+  # 否则外网 https 访问会被判成跨域，POST 直接 403 Invalid CORS request
+  forward-headers-strategy: framework
 
 spring:
   application:
