@@ -153,7 +153,8 @@ npm run build
 
 - 在线 Swagger UI：`/swagger-ui.html`
 - 离线 OpenAPI：`docs/openapi.yaml`（3.0.1，38 个路径 / 42 个操作，中文摘要）
-- **导入 Apifox**：导入数据 → OpenAPI/Swagger → 选择 `docs/openapi.yaml`；或填 URL `http://localhost:8080/v3/api-docs.yaml`
+- **导入 Apifox**：导入数据 → OpenAPI/Swagger → 选择 `docs/apifox-openapi.yaml`（Apifox 专用版，已修正媒体类型、上传接口与鉴权范围）；或填 URL `http://localhost:8080/v3/api-docs.yaml`
+- **一键导入（Windows）**：双击 `scripts/import-to-apifox.cmd`，按提示输入项目 ID 与系统级访问令牌；也可运行 `powershell -ExecutionPolicy Bypass -File scripts/import-to-apifox.ps1`
 - 导入后在环境里设置 `baseUrl`，登录接口拿到 token 填入 Bearer 鉴权
 
 主要接口分组：认证与用户、笔记、评论、关注与作者、公开接口、管理后台、AI 助手、文件上传。
