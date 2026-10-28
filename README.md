@@ -186,6 +186,7 @@ node scripts/ui-flow.mjs
 - [数据库表结构（HTML）](docs/数据库表结构.html)：浏览器打开，10 张表的字段、类型、索引与行数，`node scripts/export-db-html.mjs` 可重新生成
 - [代码地图](docs/代码地图.md)：每个模块的包路径、文件清单、关键方法行号，以及"想改 X 看哪里"
 - [代码地图（HTML）](docs/代码地图.html)：可点击跳转，模块/方法直达行号，支持搜索与 VS Code 打开，`node scripts/export-code-map-html.mjs` 重新生成
+- [功能源代码位置](docs/功能源代码位置.md)：按功能块（登录/笔记/审核/点赞/评论/关注/AI/后台等）列出前端、后端、数据与用例位置
 
 ## 配置项
 
