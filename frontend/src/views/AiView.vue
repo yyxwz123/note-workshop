@@ -567,7 +567,7 @@ export default {
       try {
         const data = await api.post(`/api/ai/notes/${selectedNoteId.value}/generate`, {
           type: selectedType.value
-        })
+        }, { timeout: 60000 })
         result.value = data
         aiUnavailable.value = false
         notifySuccess('AI 内容生成完成')
@@ -709,7 +709,7 @@ export default {
       scrollChat()
 
       try {
-        const data = await api.post('/api/ai/chat', { sessionId, message: text })
+        const data = await api.post('/api/ai/chat', { sessionId, message: text }, { timeout: 60000 })
         currentSessionId.value = data.sessionId
         messages.value.push({
           id: `assistant-${Date.now()}`,
