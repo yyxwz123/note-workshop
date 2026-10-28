@@ -185,6 +185,7 @@ node scripts/ui-flow.mjs
 - [项目清单](docs/项目清单.md)：56 个接口用例、10 张表、42 个 REST 接口一览
 - [数据库表结构（HTML）](docs/数据库表结构.html)：浏览器打开，10 张表的字段、类型、索引与行数，`node scripts/export-db-html.mjs` 可重新生成
 - [代码地图](docs/代码地图.md)：每个模块的包路径、文件清单、关键方法行号，以及"想改 X 看哪里"
+- [代码地图（HTML）](docs/代码地图.html)：可点击跳转，模块/方法直达行号，支持搜索与 VS Code 打开，`node scripts/export-code-map-html.mjs` 重新生成
 
 ## 配置项
 
