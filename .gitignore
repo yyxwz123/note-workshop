@@ -16,3 +16,4 @@ logs/
 run.log
 run.err
 .ui-check/
+src/main/resources/static/code-map.html

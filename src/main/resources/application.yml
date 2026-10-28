@@ -3,6 +3,11 @@ server:
   # 反向代理（cloudflared / nginx）转发时，按 X-Forwarded-Proto/Host 还原真实协议与域名，
   # 否则外网 https 访问会被判成跨域，POST 直接 403 Invalid CORS request
   forward-headers-strategy: framework
+  # 开启 gzip：代码地图/源码汇编等大页面通过隧道访问时体积从 2MB 降到几百 KB
+  compression:
+    enabled: true
+    mime-types: text/html,text/css,text/plain,application/javascript,application/json,image/svg+xml
+    min-response-size: 1024
 
 spring:
   application:
